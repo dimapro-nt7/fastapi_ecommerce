@@ -10,6 +10,7 @@ from app.schemas import Review as ReviewSchema, ReviewCreate
 
 from app.db_depends import get_async_db
 from app.auth import get_current_buyer, get_current_admin
+from app.routers.products import router as product_router
 
 router = APIRouter(
     prefix="/reviews",
@@ -28,7 +29,7 @@ async def get_all_reviews(db: AsyncSession = Depends(get_async_db)):
     return reviews
 
 
-@router.get("/{product_id}", response_model=list[ReviewSchema])
+@product_router.get("/{product_id}/reviews", response_model=list[ReviewSchema])
 async def get_product_reviews(product_id: int, db: AsyncSession = Depends(get_async_db)):
     """
     Возвращает список всех отзывов для указанного товара .
@@ -56,6 +57,12 @@ async def create_review(review: ReviewCreate,
     product = product.first()
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
+    stmt = select(ReviewModel).where(ReviewModel.product_id == review.product_id,
+                                     ReviewModel.user_id == current_user.id)
+    db_review = await db.scalars(stmt)
+    db_review = db_review.first()
+    if db_review is not None:
+        raise HTTPException(status_code=409, detail="Review already exists.")
     db_review = ReviewModel(**review.model_dump(), user_id=current_user.id)
     db.add(db_review)
     await db.commit()
