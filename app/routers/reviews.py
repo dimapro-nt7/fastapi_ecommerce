@@ -17,6 +17,18 @@ router = APIRouter(
     tags=["reviews"],
 )
 
+async def update_product_rating(db: AsyncSession, product_id: int):
+    result = await db.execute(
+        select(func.avg(ReviewModel.grade)).where(
+            ReviewModel.product_id == product_id,
+            ReviewModel.is_active == True
+        )
+    )
+    avg_rating = result.scalar() or 0.0
+    product = await db.get(ProductModel, product_id)
+    product.rating = avg_rating
+    await db.commit()
+
 @router.get("/", response_model=list[ReviewSchema])
 async def get_all_reviews(db: AsyncSession = Depends(get_async_db)):
     """
@@ -27,7 +39,6 @@ async def get_all_reviews(db: AsyncSession = Depends(get_async_db)):
     reviews = await db.scalars(stmt)
     reviews = reviews.all()
     return reviews
-
 
 @product_router.get("/{product_id}/reviews", response_model=list[ReviewSchema])
 async def get_product_reviews(product_id: int, db: AsyncSession = Depends(get_async_db)):
@@ -90,15 +101,3 @@ async def delete_review(
     await update_product_rating(db, db_review.product_id)
     return db_review
 
-
-async def update_product_rating(db: AsyncSession, product_id: int):
-    result = await db.execute(
-        select(func.avg(ReviewModel.grade)).where(
-            ReviewModel.product_id == product_id,
-            ReviewModel.is_active == True
-        )
-    )
-    avg_rating = result.scalar() or 0.0
-    product = await db.get(ProductModel, product_id)
-    product.rating = avg_rating
-    await db.commit()
